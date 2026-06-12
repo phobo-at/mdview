@@ -107,5 +107,21 @@ public enum MarkdownPage {
     table { border-collapse: collapse; display: block; overflow-x: auto; }
     th, td { border: 1px solid var(--border); padding: 6px 13px; }
     th { font-weight: 600; background: var(--code-bg); }
+    @media print {
+        /* Force a clean, light, full-width layout on paper / in PDFs,
+           regardless of the system's dark mode. */
+        body { background: #ffffff; color: #1f2328; }
+        article { max-width: none; margin: 0; padding: 0; }
+        a { color: #0969da; }
+        code, pre { background: #f6f8fa; }
+        pre { white-space: pre-wrap; word-wrap: break-word; }
+        pre code { background: none; }
+        th { background: #f6f8fa; }
+        h1, h2 { border-bottom-color: #d1d9e0; }
+        blockquote { border-left-color: #d1d9e0; color: #59636e; }
+        hr { border-top-color: #d1d9e0; }
+        pre, blockquote, table, img { page-break-inside: avoid; }
+        h1, h2, h3, h4, h5, h6 { page-break-after: avoid; }
+    }
     """
 }

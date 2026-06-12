@@ -20,6 +20,14 @@ import Testing
     #expect(html.contains("prefers-color-scheme: dark"))
 }
 
+@Test func includesPrintStylesForPDFAndPrinting() {
+    let html = MarkdownPage.html(from: "plain text")
+    // Print/PDF output must force a light, full-width layout regardless of the
+    // system appearance, so the document isn't centred in a narrow column or
+    // rendered on a dark background on paper.
+    #expect(html.contains("@media print"))
+}
+
 @Test func rendersEmphasisAndLists() {
     let html = MarkdownPage.html(from: "- one\n- **two**")
     #expect(html.contains("<ul>"))

@@ -3,6 +3,7 @@ import WebKit
 
 struct WebView: NSViewRepresentable {
     let html: String
+    let holder: WebViewHolder
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -10,6 +11,7 @@ struct WebView: NSViewRepresentable {
         let webView = WKWebView()
         webView.navigationDelegate = context.coordinator
         webView.setValue(false, forKey: "drawsBackground")
+        holder.webView = webView
         return webView
     }
 
