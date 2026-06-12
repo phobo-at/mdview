@@ -8,7 +8,13 @@ struct WebView: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> WKWebView {
-        let webView = WKWebView()
+        // This view only renders static, locally-produced HTML, so disable
+        // JavaScript entirely. Combined with the page's Content-Security-Policy,
+        // it stops scripts embedded in untrusted .md files from executing.
+        let configuration = WKWebViewConfiguration()
+        configuration.defaultWebpagePreferences.allowsContentJavaScript = false
+
+        let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
         webView.setValue(false, forKey: "drawsBackground")
         holder.webView = webView

@@ -28,6 +28,17 @@ import Testing
     #expect(html.contains("@media print"))
 }
 
+@Test func includesLockedDownContentSecurityPolicy() {
+    // Untrusted .md files can embed raw HTML (Ink passes it through), so the
+    // page must ship a CSP that blocks script execution and remote resource
+    // loads while still allowing our own inline styles and inline images.
+    let html = MarkdownPage.html(from: "# anything")
+    #expect(html.contains("Content-Security-Policy"))
+    #expect(html.contains("default-src 'none'"))
+    #expect(html.contains("style-src 'unsafe-inline'"))
+    #expect(html.contains("img-src data:"))
+}
+
 @Test func rendersEmphasisAndLists() {
     let html = MarkdownPage.html(from: "- one\n- **two**")
     #expect(html.contains("<ul>"))

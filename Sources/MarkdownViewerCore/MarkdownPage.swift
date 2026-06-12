@@ -16,6 +16,7 @@ public enum MarkdownPage {
         <html>
         <head>
         <meta charset="utf-8">
+        <meta http-equiv="Content-Security-Policy" content="\(csp)">
         <style>
         \(css)
         </style>
@@ -28,6 +29,13 @@ public enum MarkdownPage {
         </html>
         """
     }
+
+    /// Locks the rendered page down: untrusted `.md` files can contain raw HTML
+    /// (Ink passes it through unsanitised), so this stops any inline/remote
+    /// script from running and stops automatic loading of remote resources
+    /// (tracking beacons, IP leaks). `style-src 'unsafe-inline'` allows our own
+    /// embedded `<style>`; `img-src data:` allows inline images only.
+    static let csp = "default-src 'none'; style-src 'unsafe-inline'; img-src data:;"
 
     static let css = """
     :root {
