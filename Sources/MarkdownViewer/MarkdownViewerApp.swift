@@ -3,6 +3,8 @@ import MarkdownViewerCore
 
 @main
 struct MarkdownViewerApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
     var body: some Scene {
         DocumentGroup(viewing: MarkdownDocument.self) { configuration in
             DocumentView(
@@ -25,10 +27,11 @@ struct MarkdownViewerApp: App {
 struct DocumentView: View {
     let text: String
     let fileURL: URL?
+    @AppStorage(DefaultsKey.loadRemoteImages) private var loadRemoteImages = false
     @StateObject private var holder = WebViewHolder()
 
     var body: some View {
-        let html = MarkdownPage.html(from: text)
+        let html = MarkdownPage.html(from: text, allowRemoteImages: loadRemoteImages)
         WebView(html: html, holder: holder)
             .frame(minWidth: 480, minHeight: 600)
             .focusedSceneValue(\.webViewHolder, holder)
@@ -38,6 +41,9 @@ struct DocumentView: View {
                     holder.documentName = name
                 }
             }
+            // Keep the export HTML in sync when the image setting is toggled
+            // while a document is open.
+            .onChange(of: html) { holder.html = $0 }
     }
 }
 

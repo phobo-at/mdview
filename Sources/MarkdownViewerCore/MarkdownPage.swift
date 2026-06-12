@@ -2,21 +2,21 @@ import Foundation
 import Ink
 
 public enum MarkdownPage {
-    public static func html(contentsOf url: URL) throws -> String {
+    public static func html(contentsOf url: URL, allowRemoteImages: Bool = false) throws -> String {
         let data = try Data(contentsOf: url)
         let markdown = String(data: data, encoding: .utf8)
             ?? String(decoding: data, as: UTF8.self)
-        return html(from: markdown)
+        return html(from: markdown, allowRemoteImages: allowRemoteImages)
     }
 
-    public static func html(from markdown: String) -> String {
+    public static func html(from markdown: String, allowRemoteImages: Bool = false) -> String {
         let body = MarkdownParser().html(from: markdown)
         return """
         <!DOCTYPE html>
         <html>
         <head>
         <meta charset="utf-8">
-        <meta http-equiv="Content-Security-Policy" content="\(csp)">
+        <meta http-equiv="Content-Security-Policy" content="\(csp(allowRemoteImages: allowRemoteImages))">
         <style>
         \(css)
         </style>
@@ -32,10 +32,17 @@ public enum MarkdownPage {
 
     /// Locks the rendered page down: untrusted `.md` files can contain raw HTML
     /// (Ink passes it through unsanitised), so this stops any inline/remote
-    /// script from running and stops automatic loading of remote resources
-    /// (tracking beacons, IP leaks). `style-src 'unsafe-inline'` allows our own
-    /// embedded `<style>`; `img-src data:` allows inline images only.
-    static let csp = "default-src 'none'; style-src 'unsafe-inline'; img-src data:;"
+    /// script from running. `style-src 'unsafe-inline'` allows our own embedded
+    /// `<style>`.
+    ///
+    /// By default `img-src data:` permits inline images only — remote images are
+    /// blocked because they auto-load and leak the reader's IP / act as tracking
+    /// beacons. When the user opts in (`allowRemoteImages`), remote `http`/`https`
+    /// images are allowed too; scripts and every other resource type stay blocked.
+    static func csp(allowRemoteImages: Bool) -> String {
+        let img = allowRemoteImages ? "data: https: http:" : "data:"
+        return "default-src 'none'; style-src 'unsafe-inline'; img-src \(img);"
+    }
 
     static let css = """
     :root {

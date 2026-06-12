@@ -39,6 +39,21 @@ import Testing
     #expect(html.contains("img-src data:"))
 }
 
+@Test func blocksRemoteImagesByDefault() {
+    // Default (and Quick Look) must never permit remote image loads.
+    let html = MarkdownPage.html(from: "# anything")
+    #expect(html.contains("img-src data:;"))
+    #expect(!html.contains("https:"))
+}
+
+@Test func allowsRemoteImagesWhenOptedIn() {
+    // When the user opts in, remote http/https images are permitted, but
+    // scripts and other resource types stay blocked.
+    let html = MarkdownPage.html(from: "# anything", allowRemoteImages: true)
+    #expect(html.contains("img-src data: https: http:;"))
+    #expect(html.contains("default-src 'none'"))
+}
+
 @Test func rendersEmphasisAndLists() {
     let html = MarkdownPage.html(from: "- one\n- **two**")
     #expect(html.contains("<ul>"))
