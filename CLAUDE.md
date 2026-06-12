@@ -15,7 +15,8 @@ export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 ## Commands
 
 ```sh
-./build-app.sh        # build dist/MarkdownViewer.app, sign ad-hoc, register with Launch Services
+./build-app.sh                  # build, Developer ID sign, notarize, staple, register; outputs dist/MarkdownViewer.zip
+NOTARIZE=0 ./build-app.sh       # same but skip the Apple round-trip (signed only) — fast local iteration
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test   # run core tests (Swift Testing, not XCTest)
 ```
 
@@ -44,3 +45,13 @@ sem.wait()'
 ```
 
 The setting points at a concrete bundle path — re-run it if the app moves (e.g. from `dist/` to `/Applications`).
+
+## Signing & notarization
+
+Ad-hoc signing (`codesign --sign -`) makes the app launch on the build machine but get flagged as "unidentified developer" / damaged on any other Mac (Gatekeeper + download quarantine). To distribute, `build-app.sh` does the full Developer ID flow:
+
+- **Sign** the nested `.appex` first, then the app, with `Developer ID Application: Soon Up GmbH (6A2SZH3VT5)` plus `--options runtime` (hardened runtime) and `--timestamp`. All three are required for notarization. No `--deep` on the app, so the appex signature stays intact. The main app needs no entitlements; the appex keeps its sandbox entitlements.
+- **Notarize** via `xcrun notarytool submit … --wait` using the keychain profile `NOTARY_PROFILE` (default `ainstype-notary`, shared from the sibling `ainstype` project — same Apple team, so it just works). Create a fresh one with `xcrun notarytool store-credentials <name> --apple-id … --team-id 6A2SZH3VT5 --password <app-specific-password>`.
+- **Staple** the ticket onto the `.app` (`xcrun stapler staple`) so Gatekeeper passes offline / on first launch, then re-zip the stapled bundle as `dist/MarkdownViewer.zip` — the distributable artifact.
+
+Override `SIGN_IDENTITY` / `TEAM_ID` / `NOTARY_PROFILE` via env when building from a fork. Verify a build with `spctl -a -vvv -t exec dist/MarkdownViewer.app` (expect `source=Notarized Developer ID`) and `xcrun stapler validate`.
