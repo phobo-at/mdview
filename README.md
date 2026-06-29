@@ -1,5 +1,7 @@
 # Markdown Viewer
 
+> Fork of [ph1lb4/mdview](https://github.com/ph1lb4/mdview) — adds page zoom (⌘+/⌘-/⌘0) and notarized distribution.
+
 A minimal, native macOS app that opens `.md` files on double-click and renders them GitHub-style — with proper light and dark mode. It also ships a Quick Look extension, so hitting the space bar on a `.md` file in Finder shows the rendered preview instantly.
 
 <p align="center">
