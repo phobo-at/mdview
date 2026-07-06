@@ -18,6 +18,7 @@ struct MarkdownViewerApp: App {
         .defaultSize(width: 820, height: 1040)
         .commands {
             DocumentCommands()
+            FormatCommands()
         }
         Settings {
             SettingsView()
@@ -33,12 +34,17 @@ struct DocumentView: View {
     let fileURL: URL?
     @AppStorage(DefaultsKey.loadRemoteImages) private var loadRemoteImages = false
     @StateObject private var holder = WebViewHolder()
+    @StateObject private var editor = MarkdownEditorController()
     @State private var isEditing = false
 
     var body: some View {
         Group {
             if isEditing {
-                RawTextEditor(text: $document.text)
+                VStack(spacing: 0) {
+                    MarkdownFormatBar(editor: editor)
+                    Divider()
+                    RawTextEditor(text: $document.text, controller: editor)
+                }
             } else {
                 PreviewView(
                     text: document.text,
@@ -55,6 +61,9 @@ struct DocumentView: View {
         // commands disable themselves automatically during editing.
         .focusedSceneValue(\.webViewHolder, isEditing ? nil : holder)
         .focusedSceneValue(\.editToggle, $isEditing)
+        // The Format menu acts on the editor, so publish it only while editing —
+        // a nil value disables the whole menu in preview.
+        .focusedSceneValue(\.markdownEditor, isEditing ? editor : nil)
         .toolbar {
             ToolbarItem {
                 Button {
@@ -148,6 +157,54 @@ struct DocumentCommands: Commands {
                 .disabled(previewUnavailable)
 
             Divider()
+        }
+    }
+}
+
+/// A "Format" menu mirroring the edit-mode toolbar, with keyboard shortcuts for the
+/// common actions. Acts on the frontmost document's editor via `markdownEditor`,
+/// which `DocumentView` publishes only while editing — so every item disables
+/// itself in the rendered preview.
+struct FormatCommands: Commands {
+    @FocusedValue(\.markdownEditor) private var editor
+
+    var body: some Commands {
+        CommandMenu("Format") {
+            item("Heading 1", .heading(1), "1", [.control, .command])
+            item("Heading 2", .heading(2), "2", [.control, .command])
+            item("Heading 3", .heading(3), "3", [.control, .command])
+
+            Divider()
+
+            item("Bold", .bold, "b", .command)
+            item("Italic", .italic, "i", .command)
+            item("Strikethrough", .strikethrough, "x", [.shift, .command])
+            item("Inline Code", .inlineCode, "c", [.option, .command])
+
+            Divider()
+
+            item("Bulleted List", .bulletList)
+            item("Numbered List", .numberedList)
+            item("Block Quote", .quote)
+
+            Divider()
+
+            item("Link…", .link, "k", .command)
+            item("Code Block", .codeBlock)
+            item("Horizontal Rule", .horizontalRule)
+            item("Table", .table)
+        }
+    }
+
+    @ViewBuilder
+    private func item(_ title: String, _ format: MarkdownFormat,
+                      _ key: KeyEquivalent? = nil,
+                      _ modifiers: EventModifiers = .command) -> some View {
+        let button = Button(title) { editor?.apply(format) }.disabled(editor == nil)
+        if let key {
+            button.keyboardShortcut(key, modifiers: modifiers)
+        } else {
+            button
         }
     }
 }

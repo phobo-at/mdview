@@ -1,6 +1,6 @@
 # Markdown Viewer
 
-> Fork of [ph1lb4/mdview](https://github.com/ph1lb4/mdview) — adds page zoom (⌘+/⌘-/⌘0), YAML-frontmatter rendering, and notarized distribution.
+> Fork of [ph1lb4/mdview](https://github.com/ph1lb4/mdview) — adds page zoom (⌘+/⌘-/⌘0), an editable raw-source mode with a formatting toolbar, YAML-frontmatter rendering, and notarized distribution.
 
 A minimal, native macOS app that opens `.md` files on double-click and renders them GitHub-style — with proper light and dark mode. It also ships a Quick Look extension, so hitting the space bar on a `.md` file in Finder shows the rendered preview instantly.
 
@@ -32,6 +32,7 @@ Open the app's Settings (**⌘,**) and click **"Use Markdown Viewer for Markdown
 - 🎨 **GitHub-style rendering** — clean typography, code blocks, tables, the works
 - 🌗 **Light & dark mode** — follows your system appearance automatically
 - 🔍 **Adjustable zoom** — **⌘+** / **⌘-** / **⌘0** scale the text (⌘= works too); your size sticks across windows and launches
+- ✏️ **Edit mode** — toggle to the raw source (**⌘E**) with a formatting toolbar and a **Format** menu (headings, bold/italic, lists, links, code, tables) that insert Markdown for you; save back to disk with ⌘S
 - 🏷️ **YAML frontmatter** — a leading `---` block renders as a clean properties card (nested keys and lists included) instead of a jumbled paragraph
 - 👀 **Quick Look preview** — press space on a Markdown file in Finder
 - 🔗 **Links open in your browser** — no surprise in-app navigation

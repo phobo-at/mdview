@@ -11,6 +11,9 @@ import AppKit
 /// type is exactly what gets saved.
 struct RawTextEditor: NSViewRepresentable {
     @Binding var text: String
+    /// Receives the underlying `NSTextView` so the formatting toolbar/menu can
+    /// mutate the current selection (see `MarkdownEditorController`).
+    var controller: MarkdownEditorController
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -22,6 +25,9 @@ struct RawTextEditor: NSViewRepresentable {
         guard let textView = scrollView.documentView as? NSTextView else { return scrollView }
         textView.delegate = context.coordinator
         textView.string = text
+        // Hand the text view to the controller so the toolbar/Format menu can act
+        // on the selection. Weak on the controller side, so no retain cycle.
+        controller.textView = textView
 
         // Editing, not display.
         textView.isEditable = true
