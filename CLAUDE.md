@@ -15,8 +15,9 @@ export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 ## Commands
 
 ```sh
-./build-app.sh                  # build, Developer ID sign, notarize, staple, register; outputs dist/MarkdownViewer.zip
-NOTARIZE=0 ./build-app.sh       # same but skip the Apple round-trip (signed only) — fast local iteration
+./build-app.sh                  # build + sign + package → dist/MarkdownViewer.zip. With a Developer ID cert: notarize + staple (distributable). Without: auto ad-hoc fallback (zip runs after right-click → Open, not notarized).
+NOTARIZE=0 ./build-app.sh       # Developer ID sign but skip the Apple round-trip — fast local iteration
+SIGN_IDENTITY=- ./build-app.sh  # force ad-hoc signing (zip runs after right-click → Open)
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test   # run core tests (Swift Testing, not XCTest)
 DEVELOPER_DIR=… swift test --filter blocksRemoteImagesByDefault       # run a single test by its function name
 ```
@@ -77,7 +78,9 @@ The setting points at a concrete bundle path — re-run it if the app moves (e.g
 
 ## Signing & notarization
 
-Ad-hoc signing (`codesign --sign -`) makes the app launch on the build machine but get flagged as "unidentified developer" / damaged on any other Mac (Gatekeeper + download quarantine). To distribute, `build-app.sh` does the full Developer ID flow:
+Ad-hoc signing (`codesign --sign -`) makes the app launch on the build machine but get flagged as "unidentified developer" / damaged on any other Mac (Gatekeeper + download quarantine). To distribute, `build-app.sh` does the full Developer ID flow.
+
+**Auto-detected signing mode** (so the build never hard-fails on a machine without the cert): `build-app.sh` checks the keychain (`security find-identity -v -p codesigning`) for `$IDENTITY`. If it's there → the full Developer ID flow below. If not (or `SIGN_IDENTITY=-`) → it warns and **falls back to ad-hoc**: `--options runtime` but **no `--timestamp`** (Apple's timestamp server rejects ad-hoc, which is exactly why a hardcoded `--timestamp` used to abort the build) and notarization is force-skipped. The ad-hoc build still packages `dist/MarkdownViewer.zip`, which opens on other Macs after a one-time right-click → Open (Gatekeeper isn't satisfied automatically), but it isn't notarized. The full flow:
 
 - **Sign** the nested `.appex` first, then the app, with `Developer ID Application: Soon Up GmbH (6A2SZH3VT5)` plus `--options runtime` (hardened runtime) and `--timestamp`. All three are required for notarization. No `--deep` on the app, so the appex signature stays intact. The main app needs no entitlements; the appex keeps its sandbox entitlements.
 - **Notarize** via `xcrun notarytool submit … --wait` using the keychain profile `NOTARY_PROFILE` (default `ainstype-notary`, shared from the sibling `ainstype` project — same Apple team, so it just works). Create a fresh one with `xcrun notarytool store-credentials <name> --apple-id … --team-id 6A2SZH3VT5 --password <app-specific-password>`.
