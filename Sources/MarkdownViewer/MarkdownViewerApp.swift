@@ -6,9 +6,11 @@ struct MarkdownViewerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        DocumentGroup(viewing: MarkdownDocument.self) { configuration in
+        // Editable document scene: opens .md files for reading and, via the
+        // edit toggle, for editing/saving back to disk.
+        DocumentGroup(newDocument: MarkdownDocument()) { configuration in
             DocumentView(
-                text: configuration.document.text,
+                document: configuration.$document,
                 fileURL: configuration.fileURL
             )
         }
@@ -23,18 +25,62 @@ struct MarkdownViewerApp: App {
     }
 }
 
-/// Renders one Markdown document and exposes its web view to the menu bar.
+/// Renders one Markdown document and exposes its web view + edit toggle to the
+/// menu bar. Starts in the rendered preview; the toolbar/⌘E toggle swaps in a
+/// raw-source editor bound to the document.
 struct DocumentView: View {
-    let text: String
+    @Binding var document: MarkdownDocument
     let fileURL: URL?
     @AppStorage(DefaultsKey.loadRemoteImages) private var loadRemoteImages = false
     @StateObject private var holder = WebViewHolder()
+    @State private var isEditing = false
+
+    var body: some View {
+        Group {
+            if isEditing {
+                RawTextEditor(text: $document.text)
+            } else {
+                PreviewView(
+                    text: document.text,
+                    loadRemoteImages: loadRemoteImages,
+                    fileURL: fileURL,
+                    holder: holder
+                )
+            }
+        }
+        .frame(minWidth: 480, minHeight: 600)
+        // Expose the web view (Print/PDF/Zoom act on it) and the edit toggle
+        // (View ▸ Edit Markdown) to the menu bar for the frontmost window. The
+        // holder is published only while previewing, so those preview-only
+        // commands disable themselves automatically during editing.
+        .focusedSceneValue(\.webViewHolder, isEditing ? nil : holder)
+        .focusedSceneValue(\.editToggle, $isEditing)
+        .toolbar {
+            ToolbarItem {
+                Button {
+                    isEditing.toggle()
+                } label: {
+                    Label(isEditing ? "Done" : "Edit",
+                          systemImage: isEditing ? "eye" : "pencil")
+                }
+                .help(isEditing ? "Show the rendered preview" : "Edit the Markdown source")
+            }
+        }
+    }
+}
+
+/// The rendered, read-only preview: Markdown → styled HTML in the locked-down
+/// web view. Only mounted while not editing, so the web view (and thus the
+/// Print/PDF/Zoom commands) is torn down during editing.
+private struct PreviewView: View {
+    let text: String
+    let loadRemoteImages: Bool
+    let fileURL: URL?
+    let holder: WebViewHolder
 
     var body: some View {
         let html = MarkdownPage.html(from: text, allowRemoteImages: loadRemoteImages)
         WebView(html: html, holder: holder)
-            .frame(minWidth: 480, minHeight: 600)
-            .focusedSceneValue(\.webViewHolder, holder)
             // Browser-style un-shifted ⌘= as an alias for Zoom In. The visible
             // View-menu item advertises the HIG-conventional ⌘+ (i.e. ⌘⇧=);
             // this hidden button adds ⌘= without a duplicate menu entry.
@@ -49,41 +95,57 @@ struct DocumentView: View {
                     holder.documentName = name
                 }
             }
-            // Keep the export HTML in sync when the image setting is toggled
-            // while a document is open.
+            // Keep the export HTML in sync when the text or the image setting
+            // changes while a document is open.
             .onChange(of: html) { holder.html = $0 }
     }
 }
 
-/// File-menu Print / "Save as PDF" and View-menu Zoom entries, all acting on
-/// the frontmost document window via the focused web-view holder.
+/// File-menu Print / "Save as PDF" and View-menu Edit / Zoom entries, all acting
+/// on the frontmost document window via focused scene values.
 struct DocumentCommands: Commands {
     @FocusedValue(\.webViewHolder) private var holder
+    @FocusedValue(\.editToggle) private var editToggle
+
+    /// Print/PDF/Zoom need a rendered preview. `DocumentView` publishes the
+    /// holder only while previewing, so a nil holder already means "editing, or
+    /// no document" — no separate edit flag needed.
+    private var previewUnavailable: Bool { holder?.hasContent != true }
 
     var body: some Commands {
         CommandGroup(replacing: .printItem) {
             Button("Print…") { holder?.print() }
                 .keyboardShortcut("p", modifiers: .command)
-                .disabled(holder?.hasContent != true)
+                .disabled(previewUnavailable)
 
             Button("Save as PDF…") { holder?.exportPDF() }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
-                .disabled(holder?.hasContent != true)
+                .disabled(previewUnavailable)
         }
 
-        // Zoom lands in the View menu (placed after the system's toolbar items).
+        // Edit toggle + Zoom land in the View menu (after the system's toolbar
+        // items). Edit is enabled whenever a document window is frontmost; Zoom
+        // acts on the preview, so it's disabled while editing.
         CommandGroup(after: .toolbar) {
+            Button(editToggle?.wrappedValue == true ? "Stop Editing" : "Edit Markdown") {
+                editToggle?.wrappedValue.toggle()
+            }
+            .keyboardShortcut("e", modifiers: .command)
+            .disabled(editToggle == nil)
+
+            Divider()
+
             Button("Zoom In") { holder?.zoomIn() }
                 .keyboardShortcut("+", modifiers: .command)
-                .disabled(holder?.hasContent != true)
+                .disabled(previewUnavailable)
 
             Button("Zoom Out") { holder?.zoomOut() }
                 .keyboardShortcut("-", modifiers: .command)
-                .disabled(holder?.hasContent != true)
+                .disabled(previewUnavailable)
 
             Button("Actual Size") { holder?.resetZoom() }
                 .keyboardShortcut("0", modifiers: .command)
-                .disabled(holder?.hasContent != true)
+                .disabled(previewUnavailable)
 
             Divider()
         }

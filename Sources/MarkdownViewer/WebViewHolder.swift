@@ -222,9 +222,21 @@ struct WebViewHolderKey: FocusedValueKey {
     typealias Value = WebViewHolder
 }
 
+/// Lets the View-menu "Edit Markdown" command flip the frontmost document's
+/// edit mode. Non-nil only while a document window is focused, so the command
+/// disables itself when there's nothing to edit.
+struct EditToggleKey: FocusedValueKey {
+    typealias Value = Binding<Bool>
+}
+
 extension FocusedValues {
     var webViewHolder: WebViewHolder? {
         get { self[WebViewHolderKey.self] }
         set { self[WebViewHolderKey.self] = newValue }
+    }
+
+    var editToggle: Binding<Bool>? {
+        get { self[EditToggleKey.self] }
+        set { self[EditToggleKey.self] = newValue }
     }
 }

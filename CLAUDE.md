@@ -1,6 +1,6 @@
 # Markdown Viewer
 
-Minimal native macOS app (SwiftUI, SPM — no Xcode project) that opens `.md` files on double-click and renders them GitHub-style in a `WKWebView`.
+Minimal native macOS app (SwiftUI, SPM — no Xcode project) that opens `.md` files on double-click and renders them GitHub-style in a `WKWebView`, with an optional raw-source edit mode that saves back to disk.
 
 ## Toolchain
 
@@ -25,9 +25,9 @@ DEVELOPER_DIR=… swift test --filter blocksRemoteImagesByDefault       # run a 
 ## Architecture
 
 - `Sources/MarkdownViewerCore/MarkdownPage.swift` — the only real logic: markdown → complete styled HTML page (Ink parser + embedded CSS with light/dark + `@media print` support) plus the Content-Security-Policy, and the YAML-frontmatter handling (split → parse → render as a properties card). Pure and shared by both the app and the Quick Look extension. Covered by tests in `Tests/`; changes here are developed test-first. See **Security model** and **YAML frontmatter** below.
-- `Sources/MarkdownViewer/` — UI shell: `DocumentGroup` viewer app, read-only `FileDocument`, `WKWebView` wrapper (JavaScript disabled; links open in the default browser), Settings window, the File-menu Print / Save-as-PDF commands, and the View-menu Zoom commands. See **Security model**, **Print / PDF export**, and **Zoom** below.
+- `Sources/MarkdownViewer/` — UI shell: `DocumentGroup` document app, writable `FileDocument`, `WKWebView` preview wrapper (JavaScript disabled; links open in the default browser), the `NSTextView`-backed raw editor (`RawTextEditor.swift`) and its view⇄edit toggle, Settings window, the File-menu Print / Save-as-PDF commands, and the View-menu Edit / Zoom commands. See **Security model**, **Edit mode**, **Print / PDF export**, and **Zoom** below.
 - `Sources/QuickLookPreview/` — Quick Look preview extension (space bar in Finder): a data-based `QLPreviewProvider` returning `MarkdownPage` HTML, which Quick Look renders itself — no web view in the extension. Entry point is `NSExtensionMain` via linker flags in `Package.swift`; `main.swift` is a required-but-unused stub. `build-app.sh` assembles `Contents/PlugIns/QuickLookPreview.appex` from the binary plus `Resources/QuickLookPreview-Info.plist` and signs it with `Resources/QuickLookPreview.entitlements` (app extensions must be sandboxed; sign the appex before the app). Debug: `pluginkit -m -p com.apple.quicklook.preview` shows registration, `qlmanage -p file.md` previews, `qlmanage -r` resets caches. (`qlmanage -p -o dir` crashes inside ExtensionFoundation on this macOS — not an appex bug.)
-- `Resources/Info.plist` — declares the `net.daringfireball.markdown` document type (`md`, `markdown`, `mdown`, `mkdn`, `mkd`); this is what makes Finder offer the app for double-click.
+- `Resources/Info.plist` — declares the `net.daringfireball.markdown` document type (`md`, `markdown`, `mdown`, `mkdn`, `mkd`); this is what makes Finder offer the app for double-click. Its `CFBundleTypeRole` is `Editor` (not `Viewer`) so the SwiftUI document architecture offers Save/Revert for the edit mode.
 - `tools/make-icon.swift` — the app icon is code, not an asset: draws a white squircle with black monospace ".md" at all iconset sizes; `build-app.sh` compiles it to `Resources/AppIcon.icns` if missing. Delete the `.icns` to force regeneration after changing the drawing.
 
 ## Security model (untrusted Markdown)
@@ -38,6 +38,14 @@ DEVELOPER_DIR=… swift test --filter blocksRemoteImagesByDefault       # run a 
 2. **JavaScript off** — `WebView.swift` sets `allowsContentJavaScript = false` on the `WKWebView`, so even a CSP gap can't run script.
 
 The **Load remote images** toggle (`DefaultsKey.loadRemoteImages`, off by default) is the only knob that loosens this: when on, `MarkdownPage.html(allowRemoteImages:)` widens `img-src` to `data: https: http:` — nothing else changes. It's off by default because remote images leak the reader's IP and act as tracking beacons. Quick Look always renders with the default (blocked): the appex calls `MarkdownPage.html(contentsOf:)` with no opt-in. This behaviour is pinned by tests in `MarkdownPageTests.swift` — keep them green when touching the CSP.
+
+**Edit mode does not weaken this.** The raw editor (`RawTextEditor`) shows the source as literal text in an `NSTextView` — it renders nothing, so it's not a script-execution surface — and the preview still goes through `MarkdownPage.html(from:)` with the same CSP and JavaScript off. Saving only writes plain UTF-8 the user typed back into the file they themselves opened (the main app is not sandboxed). So edit mode is orthogonal to the rendering lockdown.
+
+## Edit mode
+
+A document window opens in the rendered preview and toggles to a raw-source editor via the toolbar button or **View ▸ Edit Markdown** (⌘E). The toggle just swaps the window's content: `DocumentView` shows the `WebView` preview or `RawTextEditor` based on an `@State isEditing` flag, exposed to the menu bar as a `FocusedValue(\.editToggle)` (a `Binding<Bool>`) — the command disables itself when no document window is frontmost. Print/PDF/Zoom act on the rendered preview, so `DocumentView` publishes the web-view holder to the menu bar *only while previewing* (`focusedSceneValue(\.webViewHolder, isEditing ? nil : holder)`); a nil holder disables those commands on its own during editing (don't instead rely on the unmounted `WKWebView`'s weak ref going nil — it lingers). They re-enable on toggle back, which re-renders with the latest text.
+
+Saving uses the stock SwiftUI document architecture, so ⌘S, the unsaved-changes dot, Revert, undo, and autosave-in-place all work for free — enabled by three things: `MarkdownDocument` is now writable (`writableContentTypes = [markdownType]`, `fileWrapper` returns `Data(text.utf8)`), the scene uses the editable `DocumentGroup(newDocument:)` initializer (which also brings File ▸ New), and the Info.plist type role is `Editor` (see **Architecture**). The editor is an `NSTextView` bridge (`RawTextEditor`), *not* SwiftUI's `TextEditor`, specifically to turn off smart quote/dash/text substitutions — those would rewrite the Markdown source (`"`→`"`, `--`→`—`) and corrupt the file. See **Security model** for why editing doesn't touch the rendering lockdown.
 
 ## Print / PDF export
 
