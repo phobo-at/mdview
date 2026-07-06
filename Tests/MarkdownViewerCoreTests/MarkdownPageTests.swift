@@ -70,6 +70,87 @@ import Testing
     #expect(html.contains("<h1>From a file</h1>"))
 }
 
+@Test func rendersFrontmatterAsPropertiesCard() {
+    let md = """
+    ---
+    odoo_id: 7863
+    name: ISOCELL GmbH & Co KG
+    loupe:
+      state: Active
+      features:
+        - Incidents
+        - Chat
+    ---
+    # Body
+    """
+    let html = MarkdownPage.html(from: md)
+    // Structured card with keys, values, nested map and a list.
+    #expect(html.contains("class=\"frontmatter\""))
+    #expect(html.contains("<dt>odoo_id</dt><dd>7863</dd>"))
+    #expect(html.contains("<dt>name</dt>"))
+    #expect(html.contains("ISOCELL GmbH &amp; Co KG"))
+    #expect(html.contains("<dt>loupe</dt>"))
+    #expect(html.contains("<dt>state</dt><dd>Active</dd>"))
+    #expect(html.contains("<dt>features</dt>"))
+    #expect(html.contains("<li>Incidents</li>"))
+    #expect(html.contains("<li>Chat</li>"))
+    // The delimiters must NOT leak into the body as <hr>, and the key/value
+    // lines must NOT collapse into a paragraph (the original bug).
+    #expect(!html.contains("<hr>"))
+    #expect(!html.contains("<p>odoo_id"))
+    // The body still renders below the card.
+    #expect(html.contains("<h1>Body</h1>"))
+}
+
+@Test func rendersBodyAfterFrontmatter() {
+    let html = MarkdownPage.html(from: "---\ntitle: Hello\n---\n# Heading")
+    #expect(html.contains("class=\"frontmatter\""))
+    #expect(html.contains("<dt>title</dt><dd>Hello</dd>"))
+    #expect(html.contains("<h1>Heading</h1>"))
+}
+
+@Test func documentWithoutFrontmatterUnchanged() {
+    let html = MarkdownPage.html(from: "# Hello")
+    #expect(!html.contains("class=\"frontmatter\""))
+    #expect(html.contains("<h1>Hello</h1>"))
+}
+
+@Test func midDocumentThematicBreakIsNotFrontmatter() {
+    // A `---` that isn't on the first line stays a thematic break, not a card.
+    let html = MarkdownPage.html(from: "Intro\n\n---\n\nMore")
+    #expect(!html.contains("class=\"frontmatter\""))
+    #expect(html.contains("<hr>"))
+}
+
+@Test func escapesFrontmatterValues() {
+    // Frontmatter is untrusted; values must be HTML-escaped, never injected raw.
+    let html = MarkdownPage.html(from: "---\nevil: <script>alert(1)</script>\n---\n# ok")
+    #expect(html.contains("&lt;script&gt;"))
+    #expect(!html.contains("<script>alert"))
+}
+
+@Test func linkifiesFrontmatterURLs() {
+    let html = MarkdownPage.html(from: "---\nurl: https://example.com/a?x=1&y=2\n---\n# ok")
+    // Bare http(s) URLs become links, with the ampersand escaped in the href.
+    #expect(html.contains("<a href=\"https://example.com/a?x=1&amp;y=2\">"))
+}
+
+@Test func unterminatedFrontmatterIsNotConsumed() {
+    // Without a closing delimiter it's not frontmatter — don't swallow the doc.
+    let html = MarkdownPage.html(from: "---\ntitle: x\n# no closing delimiter")
+    #expect(!html.contains("class=\"frontmatter\""))
+}
+
+@Test func malformedFrontmatterFallsBackToRawBlock() {
+    // A construct the simple parser can't consume cleanly (inline map in a
+    // sequence) still renders inside the card as raw text — never as a run-on
+    // paragraph — and the body below is untouched.
+    let html = MarkdownPage.html(from: "---\nlist:\n  - a: 1\n    b: 2\n---\n# ok")
+    #expect(html.contains("class=\"frontmatter\""))
+    #expect(html.contains("<pre>"))
+    #expect(html.contains("<h1>ok</h1>"))
+}
+
 @Test func rendersNonUTF8FileWithoutThrowing() throws {
     let url = FileManager.default.temporaryDirectory
         .appendingPathComponent("MarkdownPageTests-\(UUID().uuidString).md")
