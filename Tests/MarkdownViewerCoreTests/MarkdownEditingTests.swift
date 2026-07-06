@@ -212,3 +212,37 @@ private func range(_ location: Int, _ length: Int) -> NSRange {
     let edit = MarkdownEditor.edit(.numberedList, in: text, selection: range(0, (text as NSString).length))
     #expect(applied(edit, to: text) == "1. \u{0662}. x")
 }
+
+// Adversarial coverage of the maximal-run guard across every marker.
+@Test func strikethroughUnwrapsFromInnerSelection() {
+    let text = "~~s~~"
+    let edit = MarkdownEditor.edit(.strikethrough, in: text, selection: range(2, 1))
+    #expect(applied(edit, to: text) == "s")
+}
+
+@Test func inlineCodeUnwrapsPlain() {
+    let text = "`x`"
+    let edit = MarkdownEditor.edit(.inlineCode, in: text, selection: range(1, 1))
+    #expect(applied(edit, to: text) == "x")
+}
+
+// Bold on italic text nests (the `**` marker can't match the single `*` run).
+@Test func boldOnItalicNests() {
+    let text = "*a*"
+    let edit = MarkdownEditor.edit(.bold, in: text, selection: range(1, 1))
+    #expect(applied(edit, to: text) == "***a***")
+}
+
+// Italic on a full **bold** selection nests via the Case-A guard, not a partial strip.
+@Test func italicOnFullBoldSelectionNests() {
+    let text = "**a**"
+    let edit = MarkdownEditor.edit(.italic, in: text, selection: range(0, 5))
+    #expect(applied(edit, to: text) == "***a***")
+}
+
+// Unwrapping bold whose content itself contains a lone `*` must not be fooled by it.
+@Test func boldUnwrapsAroundInnerAsterisks() {
+    let text = "**a *b* c**"
+    let edit = MarkdownEditor.edit(.bold, in: text, selection: range(2, 7)) // inner "a *b* c"
+    #expect(applied(edit, to: text) == "a *b* c")
+}
