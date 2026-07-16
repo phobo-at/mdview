@@ -1,0 +1,49 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to build and draft a release for (e.g. v1.0.8)
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    # Pinned to an Apple Silicon runner: the shipped app is arm64-only, so the
+    # runner architecture is what the artifact inherits. An Intel runner here
+    # would silently ship an x86_64 build under the same name.
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+      TAG: ${{ inputs.tag || github.ref_name }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Run tests
+        run: swift test
+
+      - name: Build and package
+        # No Developer ID cert in CI, so force build-app.sh's ad-hoc path rather
+        # than letting it discover an empty keychain: this way a misconfigured
+        # runner can never quietly produce a differently-signed artifact.
+        run: SIGN_IDENTITY=- ./build-app.sh
+
+      - name: Draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/MarkdownViewer.zip --clobber
+          else
+            gh release create "$TAG" dist/MarkdownViewer.zip \
+              --draft --generate-notes --title "$TAG"
+          fi

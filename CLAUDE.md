@@ -98,3 +98,11 @@ Ad-hoc signing (`codesign --sign -`) makes the app launch on the build machine b
 - **Staple** the ticket onto the `.app` (`xcrun stapler staple`) so Gatekeeper passes offline / on first launch, then re-zip the stapled bundle as `dist/MarkdownViewer.zip` — the distributable artifact.
 
 Override `SIGN_IDENTITY` / `TEAM_ID` / `NOTARY_PROFILE` via env when building from a fork. Verify a build with `spctl -a -vvv -t exec dist/MarkdownViewer.app` (expect `source=Notarized Developer ID`) and `xcrun stapler validate`.
+
+## Releases
+
+Releases live on GitHub (`gh release list`); `v1.0.7` was the first. Each carries `dist/MarkdownViewer.zip` as its only asset.
+
+- **Automated** — `.github/workflows/release.yml` runs on a `v*` tag push (or `workflow_dispatch` with a tag input): tests → `SIGN_IDENTITY=- ./build-app.sh` → a **draft** release with the zip attached, via `gh` and the built-in `GITHUB_TOKEN` (no third-party actions). Draft on purpose: `--generate-notes` produces a bare commit list, so the install caveats below have to be written in before publishing. Re-running against an existing release re-uploads the asset (`--clobber`) instead of failing.
+- **CI builds are ad-hoc, never notarized** — the runner has no Developer ID cert, so the workflow passes `SIGN_IDENTITY=-` explicitly rather than letting the keychain probe come up empty. Release notes must therefore keep the right-click → **Open** instruction. A notarized artifact has to be built locally on a machine that holds the cert.
+- **arm64-only** — `swift build` targets the host arch and the workflow pins `macos-15` (Apple Silicon), so the shipped zip does **not** launch on Intel Macs; the README and release notes say so explicitly. A universal build is verified to work if that ever needs to change: `swift build -c release --arch arm64 --arch x86_64`, copying the binaries from `.build/apple/Products/Release/` instead of `.build/release/`.

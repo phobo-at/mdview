@@ -20,7 +20,7 @@ Grab the latest `.app` from the [**Releases**](../../releases/latest) page, unzi
 
 The app is ad-hoc signed (not notarized), so the first time you open it macOS may warn that it's from an unidentified developer. Right-click the app → **Open**, then confirm — you only have to do this once.
 
-> Requires macOS 13 (Ventura) or later.
+> Requires macOS 13 (Ventura) or later, on an **Apple Silicon** Mac — the download is arm64-only. On an Intel Mac, [build from source](#build-from-source) instead.
 
 ### Make it the default for `.md` files
 
