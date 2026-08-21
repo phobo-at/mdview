@@ -15,20 +15,30 @@ final class MarkdownEditorController: ObservableObject {
 
     func apply(_ format: MarkdownFormat) {
         guard let textView else { return }
-        let edit = MarkdownEditor.edit(format, in: textView.string, selection: textView.selectedRange())
-
-        // Only reposition the selection if the edit was actually applied —
-        // edit.selection is computed against the post-replacement text, so a
-        // rejected change would leave it pointing past the end of the string.
-        if textView.shouldChangeText(in: edit.range, replacementString: edit.replacement) {
-            textView.textStorage?.replaceCharacters(in: edit.range, with: edit.replacement)
-            textView.didChangeText()          // fires textDidChange → write-back to document.text
-            textView.setSelectedRange(edit.selection)
-            textView.scrollRangeToVisible(edit.selection)
-        }
+        apply(MarkdownEditor.edit(format, in: textView.string, selection: textView.selectedRange()))
         // A toolbar-button click moves first responder off the editor; put it back
         // so the user can keep typing where the edit landed.
         textView.window?.makeFirstResponder(textView)
+    }
+
+    /// Apply one range replacement to the text view. Shared by the formatting
+    /// actions and by find & replace (`FindController`), so both get the same
+    /// undo grouping and document write-back.
+    ///
+    /// Returns whether the edit was applied — the caller must not reposition the
+    /// selection itself if it wasn't, because `edit.selection` is computed against
+    /// the post-replacement text and would point past the end of the string.
+    @discardableResult
+    func apply(_ edit: MarkdownEdit) -> Bool {
+        guard let textView,
+              textView.shouldChangeText(in: edit.range, replacementString: edit.replacement)
+        else { return false }
+
+        textView.textStorage?.replaceCharacters(in: edit.range, with: edit.replacement)
+        textView.didChangeText()          // fires textDidChange → write-back to document.text
+        textView.setSelectedRange(edit.selection)
+        textView.scrollRangeToVisible(edit.selection)
+        return true
     }
 }
 

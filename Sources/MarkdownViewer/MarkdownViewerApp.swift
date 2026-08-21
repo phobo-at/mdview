@@ -18,6 +18,7 @@ struct MarkdownViewerApp: App {
         .defaultSize(width: 820, height: 1040)
         .commands {
             DocumentCommands()
+            FindCommands()
             FormatCommands()
         }
         Settings {
@@ -35,16 +36,20 @@ struct DocumentView: View {
     @AppStorage(DefaultsKey.loadRemoteImages) private var loadRemoteImages = false
     @StateObject private var holder = WebViewHolder()
     @StateObject private var editor = MarkdownEditorController()
+    @StateObject private var find = FindController()
     @State private var isEditing = false
 
     var body: some View {
-        Group {
+        VStack(spacing: 0) {
+            // The find bar sits above the content in both modes (⌘F).
+            if find.isPresented {
+                FindBar(find: find)
+                Divider()
+            }
             if isEditing {
-                VStack(spacing: 0) {
-                    MarkdownFormatBar(editor: editor)
-                    Divider()
-                    RawTextEditor(text: $document.text, controller: editor)
-                }
+                MarkdownFormatBar(editor: editor)
+                Divider()
+                RawTextEditor(text: $document.text, controller: editor)
             } else {
                 PreviewView(
                     text: document.text,
@@ -55,6 +60,14 @@ struct DocumentView: View {
             }
         }
         .frame(minWidth: 480, minHeight: 600)
+        // Find searches the raw source while editing and the rendered page while
+        // previewing, so it needs both surfaces and an explicit mode.
+        .onAppear {
+            find.editor = editor
+            find.holder = holder
+            find.retarget(isEditing ? .editor : .preview)
+        }
+        .onChange(of: isEditing) { find.retarget($0 ? .editor : .preview) }
         // Expose the web view (Print/PDF/Zoom act on it) and the edit toggle
         // (View ▸ Edit Markdown) to the menu bar for the frontmost window. The
         // holder is published only while previewing, so those preview-only
@@ -64,6 +77,8 @@ struct DocumentView: View {
         // The Format menu acts on the editor, so publish it only while editing —
         // a nil value disables the whole menu in preview.
         .focusedSceneValue(\.markdownEditor, isEditing ? editor : nil)
+        // Find works in both modes, so it is always published.
+        .focusedSceneValue(\.findController, find)
         .toolbar {
             ToolbarItem {
                 Button {
@@ -157,6 +172,32 @@ struct DocumentCommands: Commands {
                 .disabled(previewUnavailable)
 
             Divider()
+        }
+    }
+}
+
+/// Edit ▸ Find items, acting on the frontmost document's find bar. Searching works
+/// in both modes, so these stay enabled whenever a document window is frontmost;
+/// the bar itself only offers Replace while editing (see `FindController`).
+struct FindCommands: Commands {
+    @FocusedValue(\.findController) private var find
+
+    var body: some Commands {
+        CommandGroup(after: .textEditing) {
+            Menu("Find") {
+                Button("Find…") { find?.open(replace: false) }
+                    .keyboardShortcut("f", modifiers: .command)
+
+                Button("Find and Replace…") { find?.open(replace: true) }
+                    .keyboardShortcut("f", modifiers: [.option, .command])
+
+                Button("Find Next") { find?.findNext() }
+                    .keyboardShortcut("g", modifiers: .command)
+
+                Button("Find Previous") { find?.findPrevious() }
+                    .keyboardShortcut("g", modifiers: [.shift, .command])
+            }
+            .disabled(find == nil)
         }
     }
 }
